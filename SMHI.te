@@ -1,0 +1,65 @@
+# Tue Aug 2 2016 Victor Näslund <victor.naslund@smhi.se>
+# Initial version, not done
+
+policy_module(SMHI,1.0.0)
+
+# Import types we do not define but will use
+gen_require(`
+  type shell_exec_t;
+  type proc_t;
+  type bin_t;
+')
+
+########################################
+#
+# Declarations
+#
+
+type SMHI_t;
+type SMHI_exec_t;
+domain_type(SMHI_t)
+domain_entry_file(SMHI_t, SMHI_exec_t)
+init_daemon_domain(SMHI_t, SMHI_exec_t)
+
+type SMHI_log_t;
+logging_log_file(SMHI_log_t)
+
+type SMHI_tmp_t;
+files_tmp_file(SMHI_tmp_t)
+
+type SMHI_storage_t;
+files_type(SMHI_storage_t)
+
+########################################
+#
+# SMHI local policy
+#
+
+# Just testing some stuff, ignore this block
+# allow SMHI_t SMHI_log_t:file { read_file_perms append_file_perms };
+# allow SMHI_t SMHI_tmp_t:file { manage_file_perms append_file_perms create_file_perms };
+# files_tmp_filetrans(SMHI_t,SMHI_tmp_t,file)
+
+# Allow read write directories within SMHI_storage_t context
+allow SMHI_t SMHI_storage_t:dir { getattr search open write add_name create };
+
+# Allow read and write files within SMHI_storage_t context
+allow SMHI_t SMHI_storage_t:file { read_file_perms write_file_perms create execute_no_trans execute };
+
+# Allow creation of links within SMHI_storage_t context
+allow SMHI_t SMHI_storage_t:lnk_file { create };
+
+# Allow execute on shell context files  (bash, sh ...), needed to execute shells
+allow SMHI_t shell_exec_t:file { execute_no_trans execute };
+
+# Allow execute "normal" files such as ls ot python, needed to execute "normal" files
+allow SMHI_t bin_t:file { execute execute_no_trans };
+
+# Allow readonly access to proc_t context files, needed to exec files
+allow SMHI_t proc_t:file { read open getattr };
+
+# Incase you need help
+# https://matt.bionicmessage.net/selinux-policy-macros.html
+# http://selinuxproject.org/page/ObjectClassesPerms
+# http://selinuxproject.org/page/TypeRules#typebounds_Rule
+# https://wiki.gentoo.org/wiki/SELinux/Tutorials/Creating_a_daemon_domain
