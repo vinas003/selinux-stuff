@@ -15,20 +15,32 @@ gen_require(`
 # Declarations
 #
 
+# The context which our apps will run as
 type SMHI_t;
+
+# The context that is allowed to transition to our SMHI_t context
 type SMHI_exec_t;
+
+# Make SMHI_t a domain, code works without this line tho
 domain_type(SMHI_t)
+
+# Allow files with SMHI_exec_t domain  entry into the SMHI_t domain
 domain_entry_file(SMHI_t, SMHI_exec_t)
+
+# Transition from the init (systemd) domain into the SMHI_t domain incase the started program has the context SMHI_exec_t
 init_daemon_domain(SMHI_t, SMHI_exec_t)
 
-type SMHI_log_t;
-logging_log_file(SMHI_log_t)
-
-type SMHI_tmp_t;
-files_tmp_file(SMHI_tmp_t)
-
+# Define the context our apps files will have under /local_disk
 type SMHI_storage_t;
+
+# Identify SMHI_storage_t as a file_type
 files_type(SMHI_storage_t)
+
+# Testing some stuff, ignore this block
+# type SMHI_log_t;
+# logging_log_file(SMHI_log_t)
+# type SMHI_tmp_t;
+# files_tmp_file(SMHI_tmp_t)
 
 ########################################
 #
@@ -58,7 +70,11 @@ allow SMHI_t bin_t:file { execute execute_no_trans };
 # Allow readonly access to proc_t context files, needed to exec files
 allow SMHI_t proc_t:file { read open getattr };
 
-# Incase you need help
+
+##  Incase you need help ## 
+# http://equivocation.org/node/27
+# http://oss.tresys.com/docs/refpolicy/api/system_init.html
+# http://danwalsh.livejournal.com/23944.html
 # https://matt.bionicmessage.net/selinux-policy-macros.html
 # http://selinuxproject.org/page/ObjectClassesPerms
 # http://selinuxproject.org/page/TypeRules#typebounds_Rule
