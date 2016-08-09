@@ -1,25 +1,58 @@
+# SMHIs SELinux policy for all our applications, thats why the policy is quite liberal
+
+# Tue Aug 9 2016 Victor Näslund <victor.naslund@smhi.se>
+# Can now be used in testing
+#
 # Tue Aug 2 2016 Victor Näslund <victor.naslund@smhi.se>
 # Initial version, not done
 
 policy_module(SMHI,1.0.0)
 
 # Import types we do not define but will use
-gen_require(`
-  type shell_exec_t;
+require {
+  # Network stuff
+  type ping_exec_t;
+  type net_conf_t;
+  type http_port_t;
+  type unreserved_port_t;
+  type hi_reserved_port_t;
+  type reserved_port_t;
+  type ephemeral_port_t;
+  type ssh_port_t;
+  type ldap_port_t;
+  type ftp_port_t;
+
+  # NFS stuff
+  type autofs_t;
+  type nfs_t;
+  
   type proc_t;
-  type bin_t;
-')
+  type tmp_t;
+}
 
 ########################################
 #
 # Declarations
 #
+########################################
 
 # The context which our apps will run as
 type SMHI_t;
 
 # The context that is allowed to transition to our SMHI_t context
 type SMHI_exec_t;
+
+# Needed for networking
+type SMHI_port_t;
+
+# Define the context our apps files will have under /local_disk
+type SMHI_storage_t;
+
+########################################
+#
+# SMHI local policy
+#
+########################################
 
 # Make SMHI_t a domain, code works without this line tho
 domain_type(SMHI_t)
@@ -30,48 +63,96 @@ domain_entry_file(SMHI_t, SMHI_exec_t)
 # Transition from the init (systemd) domain into the SMHI_t domain incase the started program has the context SMHI_exec_t
 init_daemon_domain(SMHI_t, SMHI_exec_t)
 
-# Define the context our apps files will have under /local_disk
-type SMHI_storage_t;
-
 # Identify SMHI_storage_t as a file_type
 files_type(SMHI_storage_t)
 
-# Testing some stuff, ignore this block
-# type SMHI_log_t;
-# logging_log_file(SMHI_log_t)
-# type SMHI_tmp_t;
-# files_tmp_file(SMHI_tmp_t)
+# Allow sending logging to syslog
+logging_send_syslog_msg(SMHI_t)
+miscfiles_read_localization(SMHI_t)
+files_read_etc_files(SMHI_t)
+files_read_usr_files(SMHI_t)
 
-########################################
-#
-# SMHI local policy
-#
+# Allow read from /dev/urandom and /dev/random
+dev_read_rand(SMHI_t)
+dev_read_urand(SMHI_t)
 
-# Just testing some stuff, ignore this block
-# allow SMHI_t SMHI_log_t:file { read_file_perms append_file_perms };
-# allow SMHI_t SMHI_tmp_t:file { manage_file_perms append_file_perms create_file_perms };
-# files_tmp_filetrans(SMHI_t,SMHI_tmp_t,file)
+# Allow read /etc files
+files_read_etc_files(SMHI_t)
 
-# Allow read write directories within SMHI_storage_t context
-allow SMHI_t SMHI_storage_t:dir { getattr search open write add_name create };
+# Allow read /var files
+files_read_var_files(SMHI_t)
 
-# Allow read and write files within SMHI_storage_t context
-allow SMHI_t SMHI_storage_t:file { read_file_perms write_file_perms create execute_no_trans execute };
+# All read and exec for shell (bash, sh, ...) and "standard" bin (ls, python ...) files
+corecmd_read_bin_pipes(SMHI_t)
+corecmd_read_bin_sockets(SMHI_t)
+corecmd_exec_shell(SMHI_t)
+corecmd_exec_bin(SMHI_t)
 
-# Allow creation of links within SMHI_storage_t context
-allow SMHI_t SMHI_storage_t:lnk_file { create };
+# Allow DNS
+auth_use_nsswitch(SMHI_t)
 
-# Allow execute on shell context files  (bash, sh ...), needed to execute shells
-allow SMHI_t shell_exec_t:file { execute_no_trans execute };
-
-# Allow execute "normal" files such as ls ot python, needed to execute "normal" files
-allow SMHI_t bin_t:file { execute execute_no_trans };
+# Allow transition to the ping domain so we can use ping
+netutils_domtrans_ping(SMHI_t)
+# Allow execute on ping
+netutils_exec_ping(SMHI_t)
 
 # Allow readonly access to proc_t context files, needed to exec files
 allow SMHI_t proc_t:file { read open getattr };
 
+# Allow sending signals
+allow SMHI_t self:process { signal_perms };
+
+# Files and folders for (mostly) /local_disk read and write
+allow SMHI_t SMHI_storage_t:dir { manage_dir_perms };
+allow SMHI_t SMHI_storage_t:file { manage_file_perms };
+allow SMHI_t SMHI_storage_t:lnk_file { manage_lnk_file_perms };
+allow SMHI_t SMHI_storage_t:fifo_file { manage_fifo_file_perms };
+allow SMHI_t SMHI_storage_t:sock_file { manage_sock_file_perms };
+
+# Files and folders for tmp folders, (/tmp) read and write
+allow SMHI_t tmp_t:dir { manage_dir_perms };
+allow SMHI_t tmp_t:file { manage_file_perms };
+allow SMHI_t tmp_t:lnk_file { manage_lnk_file_perms };
+
+# Files and folders for nfs, (/data/...) read and write
+allow SMHI_t nfs_t:dir { manage_dir_perms };
+allow SMHI_t nfs_t:file { manage_file_perms };
+allow SMHI_t nfs_t:lnk_file { manage_lnk_file_perms };
+allow SMHI_t nfs_t:fifo_file { manage_fifo_file_perms };
+allow SMHI_t nfs_t:sock_file { manage_sock_file_perms };
+
+# Files and folders for autofs, should be read only
+allow SMHI_t autofs_t:dir { manage_dir_perms };
+allow SMHI_t autofs_t:file { manage_file_perms };
+allow SMHI_t autofs_t:lnk_file { manage_lnk_file_perms };
+
+# Allow connections and bindings to standard ports over tcp
+# Remember to put the port type in the require section at the top of this file
+allow SMHI_t http_port_t:tcp_socket { name_bind name_connect };
+allow SMHI_t ssh_port_t:tcp_socket { name_bind name_connect };
+allow SMHI_t ldap_port_t:tcp_socket { name_bind name_connect };
+allow SMHI_t ftp_port_t:tcp_socket { name_bind name_connect };
+
+# Allow connections and bindings to "unused" ports over tcp
+allow SMHI_t ephemeral_port_t:tcp_socket { name_bind name_connect };
+allow SMHI_t reserved_port_t:tcp_socket { name_bind name_connect };
+allow SMHI_t hi_reserved_port_t:tcp_socket { name_bind name_connect };
+allow SMHI_t unreserved_port_t:tcp_socket { name_bind name_connect };
+
+# Allow connections and bindings to "unused" ports over udp
+allow SMHI_t ephemeral_port_t:udp_socket { name_bind };
+allow SMHI_t reserved_port_t:udp_socket { name_bind };
+allow SMHI_t hi_reserved_port_t:udp_socket { name_bind };
+allow SMHI_t unreserved_port_t:udp_socket { name_bind };
+
+# Allow create and use sockets
+# allow SMHI_t self:rawip_socket { connected_stream_socket_perms }; 
+allow SMHI_t self:udp_socket { connected_stream_socket_perms };
+allow SMHI_t self:tcp_socket { connected_stream_socket_perms };
 
 ##  Incase you need help ## 
+# https://github.com/TresysTechnology/refpolicy/blob/master/policy/modules/services/ssh.te
+# https://github.com/TresysTechnology/refpolicy/blob/master/policy/support/obj_perm_sets.spt 
 # http://equivocation.org/node/27
 # http://oss.tresys.com/docs/refpolicy/api/system_init.html
 # http://danwalsh.livejournal.com/23944.html
