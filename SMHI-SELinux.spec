@@ -57,10 +57,12 @@ fi
 
 %post
 
+# Load the policy
+semodule -i %{SMHISELinuxPath}/SMHI.pp
+
 # If we are doing an install (NOT upgrading) the package
 if [ $1 == 1 ] 
 then
-    semodule -i %{SMHISELinuxPath}/SMHI.pp
     # Change the filecontext on /local_disk before we install the SMHI SELinux module
     semanage fcontext -a -t SMHI_storage_t "/local_disk(/.*)?"
     restorecon -R -v /local_disk/
