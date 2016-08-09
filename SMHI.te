@@ -10,6 +10,8 @@ policy_module(SMHI,1.0.0)
 
 # Import types we do not define but will use
 require {
+  type sudo_exec_t;
+
   # Network stuff
   type ping_exec_t;
   type net_conf_t;
@@ -28,6 +30,11 @@ require {
   
   type proc_t;
   type tmp_t;
+
+  # Modification to exisisting SELinux policies here
+  type lmtp_port_t;
+  type collectd_t;
+  type nrpe_t;
 }
 
 ########################################
@@ -60,7 +67,7 @@ domain_type(SMHI_t)
 # Allow files with SMHI_exec_t domain  entry into the SMHI_t domain
 domain_entry_file(SMHI_t, SMHI_exec_t)
 
-# Transition from the init (systemd) domain into the SMHI_t domain incase the started program has the context SMHI_exec_t
+# Transition from the init (systemd) domain into the SMHI_t domain if the started program has the filecontext SMHI_exec_t
 init_daemon_domain(SMHI_t, SMHI_exec_t)
 
 # Identify SMHI_storage_t as a file_type
@@ -68,19 +75,18 @@ files_type(SMHI_storage_t)
 
 # Allow sending logging to syslog
 logging_send_syslog_msg(SMHI_t)
+
+# Allow reading localization
 miscfiles_read_localization(SMHI_t)
+
+# Allow read /etc /var /usr files
 files_read_etc_files(SMHI_t)
+files_read_var_files(SMHI_t)
 files_read_usr_files(SMHI_t)
 
 # Allow read from /dev/urandom and /dev/random
 dev_read_rand(SMHI_t)
 dev_read_urand(SMHI_t)
-
-# Allow read /etc files
-files_read_etc_files(SMHI_t)
-
-# Allow read /var files
-files_read_var_files(SMHI_t)
 
 # All read and exec for shell (bash, sh, ...) and "standard" bin (ls, python ...) files
 corecmd_read_bin_pipes(SMHI_t)
@@ -91,10 +97,11 @@ corecmd_exec_bin(SMHI_t)
 # Allow DNS
 auth_use_nsswitch(SMHI_t)
 
-# Allow transition to the ping domain so we can use ping
-netutils_domtrans_ping(SMHI_t)
 # Allow execute on ping
 netutils_exec_ping(SMHI_t)
+
+# Allow transition to the ping domain so we can use ping
+netutils_domtrans_ping(SMHI_t)
 
 # Allow readonly access to proc_t context files, needed to exec files
 allow SMHI_t proc_t:file { read open getattr };
@@ -102,7 +109,10 @@ allow SMHI_t proc_t:file { read open getattr };
 # Allow sending signals
 allow SMHI_t self:process { signal_perms };
 
-# Files and folders for (mostly) /local_disk read and write
+# Allow read and exec sudo
+allow SMHI_t sudo_exec_t:file { exec_file_perms };
+
+# Files and folders for our SMHI_storage_t context (mostly) /local_disk read and write
 allow SMHI_t SMHI_storage_t:dir { manage_dir_perms };
 allow SMHI_t SMHI_storage_t:file { manage_file_perms };
 allow SMHI_t SMHI_storage_t:lnk_file { manage_lnk_file_perms };
@@ -121,7 +131,7 @@ allow SMHI_t nfs_t:lnk_file { manage_lnk_file_perms };
 allow SMHI_t nfs_t:fifo_file { manage_fifo_file_perms };
 allow SMHI_t nfs_t:sock_file { manage_sock_file_perms };
 
-# Files and folders for autofs, should be read only
+# Files and folders for autofs (/data), should be read only
 allow SMHI_t autofs_t:dir { manage_dir_perms };
 allow SMHI_t autofs_t:file { manage_file_perms };
 allow SMHI_t autofs_t:lnk_file { manage_lnk_file_perms };
@@ -146,9 +156,27 @@ allow SMHI_t hi_reserved_port_t:udp_socket { name_bind };
 allow SMHI_t unreserved_port_t:udp_socket { name_bind };
 
 # Allow create and use sockets
-# allow SMHI_t self:rawip_socket { connected_stream_socket_perms }; 
+# allow SMHI_t self:rawip_socket { connected_stream_socket_perms }; # Probably dont need rawip sockets
 allow SMHI_t self:udp_socket { connected_stream_socket_perms };
 allow SMHI_t self:tcp_socket { connected_stream_socket_perms };
+
+########################################
+#
+# Modification of exisiting SELinux policies so they work at SMHI
+#
+########################################
+
+### Collectd ###
+# Allow collectd to connect to lmtp port
+allow collectd_t lmtp_port_t:tcp_socket { name_connect };
+# Enable the boolean nagios_run_sudo since its needed for our nrpe
+# sudo semanage boolean -m --on nagios_run_sudo
+
+### NRPE ###
+# Allow nrpe to read nfs
+allow nrpe_t nfs_t:dir { search_dir_perms };
+allow nrpe_t nfs_t:file { exec_file_perms };
+allow nrpe_t nfs_t:lnk_file { read_lnk_file_perms };
 
 ##  Incase you need help ## 
 # https://github.com/TresysTechnology/refpolicy/blob/master/policy/modules/services/ssh.te
