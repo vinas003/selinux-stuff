@@ -1,6 +1,6 @@
 Name          : SMHI-SELinux
 Summary       : Package that installs %{name}
-Version       : 20160809
+Version       : 20160810
 Release       : 1
 License       : SMHI
 Group         : Applications/System
@@ -73,8 +73,8 @@ fi
 # If we are uninstalling (NOT upgrading) the package
 if [ $1 == 0 ]
 then
-    # Change the filecontext back on /local_disk before we uninstall the SMHI SELinux module
-    semanage fcontext -d -t SMHI_storage_t "/local_disk(/.*)?"
+    # Ensure we remove all non standard (eg. SMHI_storage_t) file contexts before we uninstall the SMHI SELinux module
+    semanage fcontext --deleteall
     restorecon -R -v /local_disk/
     
     # Unload the SELinux policy
@@ -95,5 +95,7 @@ rm -rf %{buildroot}
 %{SMHISELinuxPath}/Makefile
 
 %changelog
+* Wed Aug 10 2016 Victor Näslund <victor.naslund@smhi.se> 20160810-1
+- Minor fixes and added few rules after testing the policy with shibboleth
 * Tue Aug 09 2016 Victor Näslund <victor.naslund@smhi.se> 20160809-1
 - Initial version

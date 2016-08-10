@@ -37,13 +37,11 @@ require {
   type syslogd_t;
   type sysfs_t;
   type proc_net_t;
-  type nscd_var_run_t;
 
   # Requirements for modification of exisisting SELinux policies here
   type lmtp_port_t;
   type collectd_t;
   type nrpe_t;
-  type sshd_t;
 }
 
 ########################################
@@ -134,9 +132,9 @@ allow syslogd_t SMHI_storage_t:file { manage_file_perms };
 allow syslogd_t SMHI_storage_t :lnk_file { manage_lnk_file_perms };
 
 # Allow SMHI_t to read sysfs_t files
-allow SMHI_t { sysfs_t proc_net_t nscd_var_run_t } :dir { list_dir_perms };
-allow SMHI_t { sysfs_t proc_net_t nscd_var_run_t } :file { read_file_perms };
-allow SMHI_t { sysfs_t proc_net_t nscd_var_run_t } :lnk_file { read_lnk_file_perms };
+allow SMHI_t { sysfs_t proc_net_t } :dir { list_dir_perms };
+allow SMHI_t { sysfs_t proc_net_t } :file { read_file_perms };
+allow SMHI_t { sysfs_t proc_net_t } :lnk_file { read_lnk_file_perms };
 
 # Allow read and write to files and folders with the context SMHI_storage_t nfs_t autofs_t
 allow SMHI_t { SMHI_storage_t nfs_t tmp_t autofs_t } :dir { manage_dir_perms };
@@ -200,9 +198,6 @@ allow collectd_t lmtp_port_t:tcp_socket { name_connect };
 allow nrpe_t nfs_t:dir { list_dir_perms };
 allow nrpe_t nfs_t:file { read_file_perms };
 allow nrpe_t nfs_t:lnk_file { read_lnk_file_perms };
-
-# Allow sshd and nrpe to read nscd_var_run_t
-allow { sshd_t nrpe_t } nscd_var_run_t:file { read_file_perms };
 
 ###  Incase you need help ###
 # https://github.com/TresysTechnology/refpolicy/blob/master/policy/modules/services/ssh.te
