@@ -1,21 +1,23 @@
 # SMHIs SELinux policy for all our applications, thats why the policy is quite liberal
 
+# Wed Aug 10 2016 Victor Näslund <victor.naslund@smhi.se>
+# Tested with our shibboleth, added minor things to make it work 100%
+# Also better comments, small style improvments
+#
 # Tue Aug 9 2016 Victor Näslund <victor.naslund@smhi.se>
 # Can now be used in testing
 #
 # Tue Aug 2 2016 Victor Näslund <victor.naslund@smhi.se>
 # Initial version, not done
 
-policy_module(SMHI,1.0.0)
+policy_module(SMHI, 1.0.0)
 
-# Import types we do not define but will use
+# Import types we do not define but will use in our policy
 require {
-  type sudo_exec_t;
-
-  # Network stuff
+  # Network related stuff
   type ping_exec_t;
-  type net_conf_t;
   type http_port_t;
+  type http_cache_port_t;
   type unreserved_port_t;
   type hi_reserved_port_t;
   type reserved_port_t;
@@ -23,18 +25,25 @@ require {
   type ssh_port_t;
   type ldap_port_t;
   type ftp_port_t;
-
+	
   # NFS stuff
   type autofs_t;
   type nfs_t;
-  
+
+  # Others
+  type sudo_exec_t;  
   type proc_t;
   type tmp_t;
+  type syslogd_t;
+  type sysfs_t;
+  type proc_net_t;
+  type nscd_var_run_t;
 
-  # Modification to exisisting SELinux policies here
+  # Requirements for modification of exisisting SELinux policies here
   type lmtp_port_t;
   type collectd_t;
   type nrpe_t;
+  type sshd_t;
 }
 
 ########################################
@@ -49,9 +58,6 @@ type SMHI_t;
 # The context that is allowed to transition to our SMHI_t context
 type SMHI_exec_t;
 
-# Needed for networking
-type SMHI_port_t;
-
 # Define the context our apps files will have under /local_disk
 type SMHI_storage_t;
 
@@ -64,7 +70,7 @@ type SMHI_storage_t;
 # Make SMHI_t a domain, code works without this line tho
 domain_type(SMHI_t)
 
-# Allow files with SMHI_exec_t domain  entry into the SMHI_t domain
+# Allow procces started using files with SMHI_exec_t context entry into the SMHI_t domain
 domain_entry_file(SMHI_t, SMHI_exec_t)
 
 # Transition from the init (systemd) domain into the SMHI_t domain if the started program has the filecontext SMHI_exec_t
@@ -88,7 +94,7 @@ files_read_usr_files(SMHI_t)
 dev_read_rand(SMHI_t)
 dev_read_urand(SMHI_t)
 
-# All read and exec for shell (bash, sh, ...) and "standard" bin (ls, python ...) files
+# All read and exec for pipes, sockets, shell (bash, sh, ...) and "standard" bin (ls, python ...) files
 corecmd_read_bin_pipes(SMHI_t)
 corecmd_read_bin_sockets(SMHI_t)
 corecmd_exec_shell(SMHI_t)
@@ -103,62 +109,81 @@ netutils_exec_ping(SMHI_t)
 # Allow transition to the ping domain so we can use ping
 netutils_domtrans_ping(SMHI_t)
 
-# Allow readonly access to proc_t context files, needed to exec files
-allow SMHI_t proc_t:file { read open getattr };
+##### Allow statements #####
+#
+# They are written as:
+# allow <domain_that_need_the_acess> <type_to_be_accessed> : <How/what_in_the_type_to_be_used> <permissions>;
+# Example: allow SMHI_t nfs_t :file read;
+# You can define several types/permissions as by using brackets like this { type1 typ2 ... } 
+# The rule will then be applied for all those types/permissions
+#
+##### Allow statements #####
 
-# Allow sending signals
-allow SMHI_t self:process { signal_perms };
+# Allow readonly access to proc_t context files, needed to execute files
+allow SMHI_t proc_t:file { read_file_perms };
+
+# Allow sending signals and execute in our memory
+allow SMHI_t self:process { signal_perms execmem };
 
 # Allow read and exec sudo
 allow SMHI_t sudo_exec_t:file { exec_file_perms };
 
-# Files and folders for our SMHI_storage_t context (mostly) /local_disk read and write
-allow SMHI_t SMHI_storage_t:dir { manage_dir_perms };
-allow SMHI_t SMHI_storage_t:file { manage_file_perms };
-allow SMHI_t SMHI_storage_t:lnk_file { manage_lnk_file_perms };
-allow SMHI_t SMHI_storage_t:fifo_file { manage_fifo_file_perms };
-allow SMHI_t SMHI_storage_t:sock_file { manage_sock_file_perms };
+# Allow syslog to read SMHI_storage_t files
+allow syslogd_t SMHI_storage_t:dir { manage_dir_perms };
+allow syslogd_t SMHI_storage_t:file { manage_file_perms };
+allow syslogd_t SMHI_storage_t :lnk_file { manage_lnk_file_perms };
 
-# Files and folders for tmp folders, (/tmp) read and write
-allow SMHI_t tmp_t:dir { manage_dir_perms };
-allow SMHI_t tmp_t:file { manage_file_perms };
-allow SMHI_t tmp_t:lnk_file { manage_lnk_file_perms };
+# Allow SMHI_t to read sysfs_t files
+allow SMHI_t { sysfs_t proc_net_t nscd_var_run_t } :dir { list_dir_perms };
+allow SMHI_t { sysfs_t proc_net_t nscd_var_run_t } :file { read_file_perms };
+allow SMHI_t { sysfs_t proc_net_t nscd_var_run_t } :lnk_file { read_lnk_file_perms };
 
-# Files and folders for nfs, (/data/...) read and write
-allow SMHI_t nfs_t:dir { manage_dir_perms };
-allow SMHI_t nfs_t:file { manage_file_perms };
-allow SMHI_t nfs_t:lnk_file { manage_lnk_file_perms };
-allow SMHI_t nfs_t:fifo_file { manage_fifo_file_perms };
-allow SMHI_t nfs_t:sock_file { manage_sock_file_perms };
-
-# Files and folders for autofs (/data), should be read only
-allow SMHI_t autofs_t:dir { manage_dir_perms };
-allow SMHI_t autofs_t:file { manage_file_perms };
-allow SMHI_t autofs_t:lnk_file { manage_lnk_file_perms };
+# Allow read and write to files and folders with the context SMHI_storage_t nfs_t autofs_t
+allow SMHI_t { SMHI_storage_t nfs_t tmp_t autofs_t } :dir { manage_dir_perms };
+allow SMHI_t { SMHI_storage_t nfs_t tmp_t autofs_t } :file { manage_file_perms };
+allow SMHI_t { SMHI_storage_t nfs_t tmp_t autofs_t } :lnk_file { manage_lnk_file_perms };
+allow SMHI_t { SMHI_storage_t nfs_t tmp_t autofs_t } :fifo_file { manage_fifo_file_perms };
+allow SMHI_t { SMHI_storage_t nfs_t tmp_t autofs_t } :sock_file { manage_sock_file_perms };
 
 # Allow connections and bindings to standard ports over tcp
 # Remember to put the port type in the require section at the top of this file
-allow SMHI_t http_port_t:tcp_socket { name_bind name_connect };
-allow SMHI_t ssh_port_t:tcp_socket { name_bind name_connect };
-allow SMHI_t ldap_port_t:tcp_socket { name_bind name_connect };
-allow SMHI_t ftp_port_t:tcp_socket { name_bind name_connect };
+allow SMHI_t { 
+	       http_port_t 
+	       ssh_port_t 
+	       ldap_port_t 
+	       ftp_port_t 
+	       http_cache_port_t
+	     } :tcp_socket { name_bind name_connect };
 
-# Allow connections and bindings to "unused" ports over tcp
-allow SMHI_t ephemeral_port_t:tcp_socket { name_bind name_connect };
-allow SMHI_t reserved_port_t:tcp_socket { name_bind name_connect };
-allow SMHI_t hi_reserved_port_t:tcp_socket { name_bind name_connect };
-allow SMHI_t unreserved_port_t:tcp_socket { name_bind name_connect };
+# Allow connections and bindings to standard ports over udp
+# Remember to put the port type in the require section at the top of this file
+allow SMHI_t { 
+	       http_port_t 
+	       ssh_port_t 
+	       ldap_port_t 
+	       ftp_port_t 
+	       http_cache_port_t
+	     } :udp_socket { name_bind };
 
-# Allow connections and bindings to "unused" ports over udp
-allow SMHI_t ephemeral_port_t:udp_socket { name_bind };
-allow SMHI_t reserved_port_t:udp_socket { name_bind };
-allow SMHI_t hi_reserved_port_t:udp_socket { name_bind };
-allow SMHI_t unreserved_port_t:udp_socket { name_bind };
+# Allow connections and bindings to "unused (non standard)" ports over tcp
+allow SMHI_t { 
+	       ephemeral_port_t 
+	       reserved_port_t 
+	       hi_reserved_port_t 
+	       unreserved_port_t 
+	     } :tcp_socket { name_bind name_connect };
+
+# Allow connections and bindings to "unused (non standard)" ports over udp
+allow SMHI_t { 
+	       ephemeral_port_t 
+	       reserved_port_t 
+	       hi_reserved_port_t 
+	       unreserved_port_t 
+	     } :udp_socket { name_bind };
 
 # Allow create and use sockets
 # allow SMHI_t self:rawip_socket { connected_stream_socket_perms }; # Probably dont need rawip sockets
-allow SMHI_t self:udp_socket { connected_stream_socket_perms };
-allow SMHI_t self:tcp_socket { connected_stream_socket_perms };
+allow SMHI_t self : { tcp_socket udp_socket } { connected_stream_socket_perms };
 
 ########################################
 #
@@ -166,19 +191,20 @@ allow SMHI_t self:tcp_socket { connected_stream_socket_perms };
 #
 ########################################
 
-### Collectd ###
 # Allow collectd to connect to lmtp port
 allow collectd_t lmtp_port_t:tcp_socket { name_connect };
 # Enable the boolean nagios_run_sudo since its needed for our nrpe
 # sudo semanage boolean -m --on nagios_run_sudo
 
-### NRPE ###
-# Allow nrpe to read nfs
-allow nrpe_t nfs_t:dir { search_dir_perms };
-allow nrpe_t nfs_t:file { exec_file_perms };
+# Allow nrpe to read nfs and nscd_var_run_t
+allow nrpe_t nfs_t:dir { list_dir_perms };
+allow nrpe_t nfs_t:file { read_file_perms };
 allow nrpe_t nfs_t:lnk_file { read_lnk_file_perms };
 
-##  Incase you need help ## 
+# Allow sshd and nrpe to read nscd_var_run_t
+allow { sshd_t nrpe_t } nscd_var_run_t:file { read_file_perms };
+
+###  Incase you need help ###
 # https://github.com/TresysTechnology/refpolicy/blob/master/policy/modules/services/ssh.te
 # https://github.com/TresysTechnology/refpolicy/blob/master/policy/support/obj_perm_sets.spt 
 # http://equivocation.org/node/27
@@ -188,3 +214,4 @@ allow nrpe_t nfs_t:lnk_file { read_lnk_file_perms };
 # http://selinuxproject.org/page/ObjectClassesPerms
 # http://selinuxproject.org/page/TypeRules#typebounds_Rule
 # https://wiki.gentoo.org/wiki/SELinux/Tutorials/Creating_a_daemon_domain
+
