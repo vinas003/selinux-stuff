@@ -50,7 +50,7 @@ require {
 #
 ########################################
 
-# The context which our apps will run as
+# The domain which our apps will run as
 type SMHI_t;
 
 # The context that is allowed to transition to our SMHI_t context
@@ -65,7 +65,7 @@ type SMHI_storage_t;
 #
 ########################################
 
-# Make SMHI_t a domain, code works without this line tho
+# Make SMHI_t a domain
 domain_type(SMHI_t)
 
 # Allow procces started using files with SMHI_exec_t context entry into the SMHI_t domain
@@ -74,7 +74,7 @@ domain_entry_file(SMHI_t, SMHI_exec_t)
 # Transition from the init (systemd) domain into the SMHI_t domain if the started program has the filecontext SMHI_exec_t
 init_daemon_domain(SMHI_t, SMHI_exec_t)
 
-# Identify SMHI_storage_t as a file_type
+# Identify SMHI_storage_t as a filecontext
 files_type(SMHI_storage_t)
 
 # Allow sending logging to syslog
@@ -112,7 +112,7 @@ netutils_domtrans_ping(SMHI_t)
 # They are written as:
 # allow <domain_that_need_the_acess> <type_to_be_accessed> : <How/what_in_the_type_to_be_used> <permissions>;
 # Example: allow SMHI_t nfs_t :file read;
-# You can define several types/permissions as by using brackets like this { type1 typ2 ... } 
+# You can define several types/permissions as by using brackets like this { type1 type2 ... } 
 # The rule will then be applied for all those types/permissions
 #
 ##### Allow statements #####
@@ -129,7 +129,7 @@ allow SMHI_t sudo_exec_t:file { exec_file_perms };
 # Allow syslog to read SMHI_storage_t files
 allow syslogd_t SMHI_storage_t:dir { manage_dir_perms };
 allow syslogd_t SMHI_storage_t:file { manage_file_perms };
-allow syslogd_t SMHI_storage_t :lnk_file { manage_lnk_file_perms };
+allow syslogd_t SMHI_storage_t:lnk_file { manage_lnk_file_perms };
 
 # Allow SMHI_t to read sysfs_t files
 allow SMHI_t { sysfs_t proc_net_t } :dir { list_dir_perms };
@@ -143,36 +143,32 @@ allow SMHI_t { SMHI_storage_t nfs_t tmp_t autofs_t } :lnk_file { manage_lnk_file
 allow SMHI_t { SMHI_storage_t nfs_t tmp_t autofs_t } :fifo_file { manage_fifo_file_perms };
 allow SMHI_t { SMHI_storage_t nfs_t tmp_t autofs_t } :sock_file { manage_sock_file_perms };
 
-# Allow connections and bindings to standard ports over tcp
-# Remember to put the port type in the require section at the top of this file
+# Allow connections and port bindings over tcp
 allow SMHI_t { 
+	       # Allow connections and portbindings to standard over tcp
 	       http_port_t 
 	       ssh_port_t 
 	       ldap_port_t 
 	       ftp_port_t 
 	       http_cache_port_t
-	     } :tcp_socket { name_bind name_connect };
-
-# Allow connections and bindings to standard ports over udp
-# Remember to put the port type in the require section at the top of this file
-allow SMHI_t { 
-	       http_port_t 
-	       ssh_port_t 
-	       ldap_port_t 
-	       ftp_port_t 
-	       http_cache_port_t
-	     } :udp_socket { name_bind };
-
-# Allow connections and bindings to "unused (non standard)" ports over tcp
-allow SMHI_t { 
+	       
+	       # Allow connections and portbindings to "unused" (non standard) over tcp
 	       ephemeral_port_t 
 	       reserved_port_t 
 	       hi_reserved_port_t 
 	       unreserved_port_t 
 	     } :tcp_socket { name_bind name_connect };
 
-# Allow connections and bindings to "unused (non standard)" ports over udp
+# Allow connections and portbindings over udp
 allow SMHI_t { 
+	       # Allow connections and bindings to standard ports over udp
+	       http_port_t 
+	       ssh_port_t 
+	       ldap_port_t 
+	       ftp_port_t 
+	       http_cache_port_t
+	       
+	       # Allow connections and portbindings to "unused" (non standard) over udp
 	       ephemeral_port_t 
 	       reserved_port_t 
 	       hi_reserved_port_t 
@@ -191,7 +187,7 @@ allow SMHI_t self : { tcp_socket udp_socket } { connected_stream_socket_perms };
 
 # Allow collectd to connect to lmtp port
 allow collectd_t lmtp_port_t:tcp_socket { name_connect };
-# Enable the boolean nagios_run_sudo since its needed for our nrpe
+# The oolean nagios_run_sudo since its needed for our nrpe, enable by running:
 # sudo semanage boolean -m --on nagios_run_sudo
 
 # Allow nrpe to read nfs and nscd_var_run_t

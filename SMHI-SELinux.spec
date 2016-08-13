@@ -12,7 +12,7 @@ Requires      : policycoreutils-python setools-console
 # Packages needed to build the rpm
 BuildRequires : selinux-policy-devel
 
-# Define the path to our files
+# Define the path to our folder 
 %define SMHISELinuxPath /etc/smhi/SELinux
 
 %description
@@ -42,7 +42,7 @@ ln -s /usr/share/selinux/devel/Makefile
 # Compile the policy
 make
 
-# Remove not needed files create by the compiler
+# Remove not needed files created by the compiler
 rm -rf SMHI.fc SMHI.if SMHI.tpm tmp 
 
 %pre
@@ -78,7 +78,7 @@ then
     restorecon -R -v /local_disk/
     
     # Unload the SELinux policy
-    semodule -r SMHI    
+    semodule -r SMHI
 fi
 
 %clean
